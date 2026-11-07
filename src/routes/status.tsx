@@ -1,33 +1,70 @@
-import { createFileRoute } from "@tanstack/react-router";
+﻿import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { callJarvisChat } from "@/lib/ai/jarvis-ai";
 import { Shell, Page, Panel, Badge } from "@/components/jarvis/Shell";
 
 export const Route = createFileRoute("/status")({
   head: () => ({
     meta: [
-      { title: "System Status — JARVIS" },
-      { name: "description", content: "Live status of JARVIS's interface, voice, memory and AI subsystems." },
-      { property: "og:title", content: "System Status — JARVIS" },
-      { property: "og:description", content: "Live status of JARVIS's interface, voice, memory and AI subsystems." },
+      { title: "System Status - JARVIS" },
+      { name: "description", content: "Live status of JARVIS systems." },
     ],
   }),
   component: StatusPage,
 });
 
+type Check = {
+  name: string;
+  ok: boolean;
+  note: string;
+};
+
 function StatusPage() {
-  const [checks, setChecks] = useState<{ name: string; ok: boolean; note: string }[]>([]);
+  const [checks, setChecks] = useState<Check[]>([
+    { name: "Interface", ok: true, note: "Running" },
+    { name: "Network", ok: navigator.onLine, note: navigator.onLine ? "Online" : "Offline" },
+    { name: "Voice input", ok: false, note: "Checking..." },
+    { name: "Voice output", ok: false, note: "Checking..." },
+    { name: "AI intelligence (Gemini)", ok: false, note: "Testing connection..." },
+  ]);
+
   useEffect(() => {
     const w = window as any;
-    setChecks([
-      { name: "Interface", ok: true, note: "Running" },
+
+    setChecks((previous) => [
+      ...previous.filter((c) => c.name !== "Voice input" && c.name !== "Voice output"),
       { name: "Voice input", ok: !!(w.SpeechRecognition || w.webkitSpeechRecognition), note: "Browser speech recognition" },
       { name: "Voice output", ok: !!window.speechSynthesis, note: "Browser speech synthesis" },
-      { name: "Network", ok: navigator.onLine, note: navigator.onLine ? "Online" : "Offline" },
-      { name: "Cloud database & sign-in", ok: false, note: "Phase 2" },
-      { name: "AI intelligence (Gemini)", ok: false, note: "Awaiting GEMINI_API_KEY secret" },
-      { name: "Tools & memory sync", ok: false, note: "Phase 5" },
     ]);
+
+    let active = true;
+
+    callJarvisChat({
+      messages: [{ role: "user", text: "Reply with exactly: JARVIS ONLINE" }],
+      model: "gemini-3.5-flash-lite",
+    })
+      .then((result) => {
+        if (!active) return;
+        setChecks((previous) => previous.map((c) =>
+          c.name === "AI intelligence (Gemini)"
+            ? { ...c, ok: true, note: `Connected - ${result.usage?.model || "Gemini"}` }
+            : c
+        ));
+      })
+      .catch((error) => {
+        if (!active) return;
+        setChecks((previous) => previous.map((c) =>
+          c.name === "AI intelligence (Gemini)"
+            ? { ...c, ok: false, note: error instanceof Error ? error.message : "Connection failed" }
+            : c
+        ));
+      });
+
+    return () => {
+      active = false;
+    };
   }, []);
+
   return (
     <Shell>
       <Page title="STATUS" subtitle="Live checks from this device.">

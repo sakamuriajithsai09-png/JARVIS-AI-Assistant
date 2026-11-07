@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+﻿import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { Mic, MicOff, Send, Volume2, VolumeX, Trash2 } from "lucide-react";
 import { Shell } from "@/components/jarvis/Shell";
@@ -18,9 +18,9 @@ import { cn } from "@/lib/utils";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "JARVIS Core — Personal AI Assistant" },
+      { title: "JARVIS Core â€” Personal AI Assistant" },
       { name: "description", content: "Talk to JARVIS by voice or text through the cosmic AI core." },
-      { property: "og:title", content: "JARVIS Core — Personal AI Assistant" },
+      { property: "og:title", content: "JARVIS Core â€” Personal AI Assistant" },
       { property: "og:description", content: "Talk to JARVIS by voice or text through the cosmic AI core." },
     ],
   }),
@@ -135,7 +135,7 @@ function Index() {
                 </div>
               </div>
             ))}
-            {state === "thinking" && <div className="text-sm text-cyan animate-pulse">JARVIS is processing…</div>}
+            {state === "thinking" && <div className="text-sm text-cyan animate-pulse">JARVIS is processingâ€¦</div>}
             <div ref={endRef} />
           </section>
         )}
@@ -150,7 +150,7 @@ function Index() {
             value={sr.listening ? sr.interim || text : text}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(text); } }}
-            placeholder={sr.listening ? "Listening…" : "Ask JARVIS anything…"}
+            placeholder={sr.listening ? "Listeningâ€¦" : "Ask JARVIS anythingâ€¦"}
             className="flex-1 resize-none bg-transparent px-2 py-2 text-foreground placeholder:text-muted-foreground focus:outline-none max-h-40"
           />
           <button type="button" onClick={() => setMuted(!muted)} className="p-2.5 rounded-xl text-muted-foreground hover:text-cyan" aria-label={muted ? "Unmute voice" : "Mute voice"}>
@@ -172,13 +172,11 @@ function Index() {
         </form>
         {(sr.error || !sr.supported) && (
           <p className="text-xs text-muted-foreground text-center">
-            {sr.error ?? "Voice input isn't available in this browser — type instead, or use Chrome/Edge."}
+            {sr.error ?? "Voice input isn't available in this browser â€” type instead, or use Chrome/Edge."}
           </p>
         )}
-        <p className="text-[11px] text-muted-foreground/70 text-center">
-          Live Gemini mode requires a configured GEMINI_API_KEY and Supabase Edge Function. <Link to="/status" className="text-cyan">System status</Link>
-        </p>
       </div>
     </Shell>
   );
 }
+
