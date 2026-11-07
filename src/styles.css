@@ -115,3 +115,21 @@
 @keyframes spin-rev { to { transform: rotate(-360deg); } }
 @keyframes breathe { 0%,100% { transform: scale(1); } 50% { transform: scale(1.04); } }
 @keyframes drift { 0% { transform: translateY(0); opacity: 0; } 20% { opacity: .8; } 100% { transform: translateY(-100vh); opacity: 0; } }
+@keyframes voice-wave { 0%,100% { transform: scaleY(.3); opacity: .6; } 50% { transform: scaleY(1); opacity: 1; } }
+@keyframes voice-mic-ring { 0%,100% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--cyan) 30%, transparent); } 50% { box-shadow: 0 0 0 7px color-mix(in oklab, var(--cyan) 0%, transparent); } }
+
+.voice-waveform-bar {
+  transform-origin: bottom;
+  animation-name: voice-wave;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+}
+
+.voice-mic-listening {
+  animation: voice-mic-ring 1.4s ease-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .voice-waveform-bar,
+  .voice-mic-listening { animation-duration: 2s !important; }
+}

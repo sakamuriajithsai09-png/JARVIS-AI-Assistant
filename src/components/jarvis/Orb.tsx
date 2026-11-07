@@ -1,10 +1,24 @@
 import { cn } from "@/lib/utils";
 
-export type CoreState = "idle" | "listening" | "thinking" | "speaking" | "error";
+export type CoreState = "idle" | "listening" | "processing" | "speaking" | "error";
 
-const speed: Record<CoreState, number> = { idle: 1, listening: 0.8, thinking: 0.3, speaking: 0.6, error: 1.5 };
+const speed: Record<CoreState, number> = {
+  idle: 1,
+  listening: 0.8,
+  processing: 0.3,
+  speaking: 0.6,
+  error: 1.5,
+};
 
-export function Orb({ state, level = 0, size = 300 }: { state: CoreState; level?: number; size?: number }) {
+export function Orb({
+  state,
+  level = 0,
+  size = 300,
+}: {
+  state: CoreState;
+  level?: number;
+  size?: number;
+}) {
   const s = speed[state];
   const core =
     state === "listening"
@@ -57,23 +71,39 @@ export function Orb({ state, level = 0, size = 300 }: { state: CoreState; level?
         <div
           className="absolute inset-[-30%] opacity-60 mix-blend-screen"
           style={{
-            background: "conic-gradient(from 0deg, transparent, var(--cyan), transparent, var(--neon), transparent)",
+            background:
+              "conic-gradient(from 0deg, transparent, var(--cyan), transparent, var(--neon), transparent)",
             animation: `spin-slow ${6 * s}s linear infinite`,
           }}
         />
       </div>
-      {state === "speaking" && (
-        <div className="absolute bottom-[8%] flex items-end gap-1 h-8">
+      {(state === "listening" || state === "speaking") && (
+        <div
+          className="absolute bottom-[8%] flex items-end gap-1 h-8"
+          role="img"
+          aria-label={
+            state === "listening" ? "Microphone listening animation" : "JARVIS speaking animation"
+          }
+        >
           {Array.from({ length: 12 }).map((_, i) => (
             <span
               key={i}
-              className="w-1 rounded-full bg-cyan animate-pulse"
-              style={{ height: `${30 + ((i * 37) % 70)}%`, animationDelay: `${i * 80}ms` }}
+              className="w-1 rounded-full bg-cyan voice-waveform-bar"
+              style={{
+                height: `${30 + ((i * 37) % 70)}%`,
+                animationDelay: `${i * 65}ms`,
+                animationDuration: state === "listening" ? "620ms" : "460ms",
+              }}
             />
           ))}
         </div>
       )}
-      <div className={cn("absolute -bottom-2 h-2 w-2 rounded-full", state === "error" ? "bg-destructive" : "hidden")} />
+      <div
+        className={cn(
+          "absolute -bottom-2 h-2 w-2 rounded-full",
+          state === "error" ? "bg-destructive" : "hidden",
+        )}
+      />
     </div>
   );
 }
