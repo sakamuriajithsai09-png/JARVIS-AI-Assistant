@@ -77,9 +77,10 @@ describe("Gemini chat request", () => {
   });
 
   it("uses the current model default and migrates retired saved models", () => {
-    expect(DEFAULT_GEMINI_MODEL).toBe("gemini-3.8-flash");
+    expect(DEFAULT_GEMINI_MODEL).toBe("gemini-3.5-flash-lite");
     expect(normalizeGeminiModel("gemini-2.5-flash")).toBe(DEFAULT_GEMINI_MODEL);
     expect(normalizeGeminiModel("gemini-2.5-pro")).toBe(DEFAULT_GEMINI_MODEL);
+    expect(normalizeGeminiModel("gemini-3.8-flash")).toBe(DEFAULT_GEMINI_MODEL);
   });
 
   it("converts conversation history to Gemini contents and keeps instructions separate", async () => {
@@ -111,7 +112,7 @@ describe("Gemini chat request", () => {
     await expect(response.json()).resolves.toMatchObject({ reply: "Hello from Gemini." });
 
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
-    expect(url).toBe("https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent");
+    expect(url).toBe("https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent");
     expect(new Headers(init.headers).get("content-type")).toBe("application/json");
     expect(new Headers(init.headers).get("x-goog-api-key")).toBe("test-secret");
     expect(url).not.toContain("test-secret");

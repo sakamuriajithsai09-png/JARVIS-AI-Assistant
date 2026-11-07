@@ -71,7 +71,7 @@ export async function callJarvisChat(request: ChatRequest): Promise<ChatResponse
       headers,
       body: JSON.stringify({
         messages: request.messages,
-        model: request.model || "gemini-3.8-flash",
+        model: request.model || "gemini-3.5-flash-lite",
         systemInstruction: request.systemInstruction || JARVIS_SYSTEM_INSTRUCTION,
       }),
     });
@@ -130,7 +130,7 @@ export async function handleJarvisChatRequest(request: Request, env: unknown): P
   }
 
   const messages = Array.isArray(body.messages) ? body.messages : [];
-  const model = body.model || "gemini-3.8-flash";
+  const model = body.model || "gemini-3.5-flash-lite";
   const systemInstruction = body.systemInstruction || JARVIS_SYSTEM_INSTRUCTION;
 
   if (!messages.length) {

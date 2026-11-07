@@ -39,7 +39,7 @@ function SettingsPage() {
           <div>
             <p className={label}>Model</p>
             <select className={`${input} mt-1`} value={model} onChange={(e) => set("model", e.target.value)}>
-              <option value="gemini-3.8-flash">Gemini 3.8 Flash — fast</option>
+              <option value="gemini-3.5-flash-lite">Gemini 3.5 Flash-Lite — efficient</option>
             </select>
           </div>
           <div>

@@ -28,10 +28,10 @@ export type Settings = {
   dailyLimit: number;
 };
 
-export const DEFAULT_GEMINI_MODEL = "gemini-3.8-flash";
+export const DEFAULT_GEMINI_MODEL = "gemini-3.5-flash-lite";
 
 export function normalizeGeminiModel(model: string) {
-  return model === "gemini-2.5-flash" || model === "gemini-2.5-pro"
+  return model === "gemini-2.5-flash" || model === "gemini-2.5-pro" || model === "gemini-3.8-flash"
     ? DEFAULT_GEMINI_MODEL
     : model;
 }
