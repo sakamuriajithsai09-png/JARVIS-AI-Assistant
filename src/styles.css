@@ -1,0 +1,117 @@
+@import "tailwindcss" source(none);
+@source "../src";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --font-display: "Orbitron", sans-serif;
+  --font-sans: "Exo 2", sans-serif;
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-neon: var(--neon);
+  --color-cyan: var(--cyan);
+  --color-navy: var(--navy);
+}
+
+:root {
+  --radius: 0.875rem;
+  --background: oklch(0.1 0.015 275);        /* #03040B */
+  --navy: oklch(0.16 0.04 270);              /* #080B1B */
+  --foreground: oklch(0.96 0.015 270);       /* #F1F5FF */
+  --card: oklch(0.14 0.02 275);              /* #080A14 */
+  --card-foreground: oklch(0.96 0.015 270);
+  --popover: oklch(0.14 0.02 275);
+  --popover-foreground: oklch(0.96 0.015 270);
+  --primary: oklch(0.6 0.21 258);            /* #1677FF */
+  --primary-foreground: oklch(0.98 0.01 270);
+  --neon: oklch(0.56 0.29 307);              /* #A020F0 */
+  --cyan: oklch(0.82 0.15 215);              /* #00D9FF */
+  --secondary: oklch(0.2 0.04 270);
+  --secondary-foreground: oklch(0.96 0.015 270);
+  --muted: oklch(0.2 0.035 270);
+  --muted-foreground: oklch(0.78 0.07 260);  /* #9CB8E8 */
+  --accent: oklch(0.24 0.06 280);
+  --accent-foreground: oklch(0.96 0.015 270);
+  --destructive: oklch(0.62 0.22 22);
+  --destructive-foreground: oklch(0.98 0 0);
+  --border: oklch(0.6 0.15 280 / 25%);
+  --input: oklch(0.6 0.15 280 / 30%);
+  --ring: oklch(0.82 0.15 215);
+  --gradient-glow: linear-gradient(90deg, var(--neon), var(--primary), var(--cyan));
+}
+
+@layer base {
+  * { border-color: var(--color-border); }
+  html, body { background: var(--color-background); }
+  body {
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    background:
+      radial-gradient(ellipse 70% 50% at 50% 30%, oklch(0.3 0.15 290 / 35%), transparent 70%),
+      radial-gradient(ellipse 60% 40% at 50% 100%, oklch(0.35 0.15 258 / 25%), transparent 70%),
+      var(--color-background);
+    min-height: 100vh;
+  }
+}
+
+@utility glass {
+  background: color-mix(in oklab, var(--card) 65%, transparent);
+  backdrop-filter: blur(18px);
+  border: 1px solid var(--border);
+}
+
+@utility glow-border {
+  position: relative;
+  &::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    padding: 1px;
+    border-radius: inherit;
+    background: var(--gradient-glow);
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+  box-shadow: 0 0 24px -6px color-mix(in oklab, var(--neon) 60%, transparent),
+    0 0 40px -12px color-mix(in oklab, var(--primary) 60%, transparent);
+}
+
+@utility text-gradient {
+  background: var(--gradient-glow);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+@utility text-glow {
+  text-shadow: 0 0 12px color-mix(in oklab, var(--cyan) 70%, transparent);
+}
+
+@keyframes spin-slow { to { transform: rotate(360deg); } }
+@keyframes spin-rev { to { transform: rotate(-360deg); } }
+@keyframes breathe { 0%,100% { transform: scale(1); } 50% { transform: scale(1.04); } }
+@keyframes drift { 0% { transform: translateY(0); opacity: 0; } 20% { opacity: .8; } 100% { transform: translateY(-100vh); opacity: 0; } }
