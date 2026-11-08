@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-// Phase 1: browser-local storage. Phase 2 moves these to the secure database.
+// Local storage remains the durable offline cache and migration source for cloud data.
 export function useLocal<T>(key: string, initial: T) {
   const [val, setVal] = useState<T>(initial);
   const [ready, setReady] = useState(false);
@@ -8,17 +8,39 @@ export function useLocal<T>(key: string, initial: T) {
     try {
       const raw = localStorage.getItem(key);
       if (raw) setVal(JSON.parse(raw));
-    } catch {}
+    } catch (error) {
+      console.error(`Could not read local storage key "${key}".`, error);
+    }
     setReady(true);
   }, [key]);
   useEffect(() => {
-    if (ready) localStorage.setItem(key, JSON.stringify(val));
+    if (ready) {
+      try {
+        localStorage.setItem(key, JSON.stringify(val));
+      } catch (error) {
+        console.error(`Could not save local storage key "${key}".`, error);
+      }
+    }
   }, [key, val, ready]);
-  return [val, setVal] as const;
+  return [val, setVal, ready] as const;
 }
 
-export type ChatMsg = { id: string; role: "user" | "assistant" | "system"; text: string; at: number; error?: boolean };
-export type Memory = { id: string; text: string; category: string; at: number };
+export type ChatMsg = {
+  id: string;
+  role: "user" | "assistant" | "system";
+  text: string;
+  at: number;
+  error?: boolean;
+  idempotencyKey?: string;
+};
+export type Memory = {
+  id: string;
+  text: string;
+  category: string;
+  at: number;
+  memoryKey?: string;
+  pendingSync?: boolean;
+};
 export type Settings = {
   model: string;
   instructions: string;

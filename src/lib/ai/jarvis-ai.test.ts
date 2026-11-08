@@ -1,7 +1,13 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+const { getSessionMock } = vi.hoisted(() => ({ getSessionMock: vi.fn() }));
+vi.mock("../supabase/client", () => ({
+  createClient: () => ({ auth: { getSession: getSessionMock } }),
+}));
 
 import {
   handleJarvisChatRequest,
+  authenticateSupabaseRequest,
   JARVIS_SYSTEM_INSTRUCTION,
   normalizeMessages,
   callJarvisChat,
@@ -17,6 +23,13 @@ afterEach(() => {
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
   vi.restoreAllMocks();
+});
+
+beforeEach(() => {
+  getSessionMock.mockResolvedValue({
+    data: { session: { access_token: "user-access-token" } },
+    error: null,
+  });
 });
 
 describe("Gemini chat request", () => {
@@ -84,12 +97,12 @@ describe("Gemini chat request", () => {
   });
 
   it("converts conversation history to Gemini contents and keeps instructions separate", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      Response.json({
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(Response.json([]))
+      .mockResolvedValueOnce(Response.json({
         candidates: [{ content: { parts: [{ text: "Hello from Gemini." }] } }],
         usageMetadata: { promptTokenCount: 3, candidateTokenCount: 4, totalTokenCount: 7 },
-      }),
-    );
+      }));
     vi.stubGlobal("fetch", fetchMock);
 
     const response = await handleJarvisChatRequest(
@@ -103,15 +116,27 @@ describe("Gemini chat request", () => {
             { role: "user", text: "How are you?" },
           ],
           systemInstruction: "Be helpful.",
+          user_id: "attacker-controlled-id",
         }),
       }),
-      { GEMINI_API_KEY: "test-secret" },
+      {
+        GEMINI_API_KEY: "test-secret",
+        VITE_SUPABASE_URL: "https://project-ref.supabase.co",
+        VITE_SUPABASE_ANON_KEY: "public-anon-key",
+      },
+      async () => ({ id: "verified-user-id", accessToken: "verified-user-token" }),
     );
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({ reply: "Hello from Gemini." });
 
-    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const [memoryUrl, memoryInit] = fetchMock.mock.calls[0] as [string | URL, RequestInit];
+    expect(new URL(memoryUrl).searchParams.get("user_id")).toBe("eq.verified-user-id");
+    expect(new Headers(memoryInit.headers).get("authorization")).toBe(
+      "Bearer verified-user-token",
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const [url, init] = fetchMock.mock.calls[1] as [string, RequestInit];
     expect(url).toBe("https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent");
     expect(new Headers(init.headers).get("content-type")).toBe("application/json");
     expect(new Headers(init.headers).get("x-goog-api-key")).toBe("test-secret");
@@ -133,6 +158,47 @@ describe("Gemini chat request", () => {
         { role: "user", text: "Hello" },
       ]),
     ).toEqual([{ role: "user", parts: [{ text: "Hello" }] }]);
+  });
+
+  it("rejects unauthenticated local chat requests before calling Gemini", async () => {
+    const response = await handleJarvisChatRequest(
+      new Request("http://localhost/api/jarvis-chat", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ messages: [{ role: "user", text: "Hello" }] }),
+      }),
+      { GEMINI_API_KEY: "test-secret" },
+    );
+
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toMatchObject({
+      error: "Authentication required.",
+    });
+  });
+
+  it("verifies the supplied access token with Supabase Auth", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(Response.json({ id: "verified-user-id" }));
+    vi.stubGlobal("fetch", fetchMock);
+    const request = new Request("http://localhost/api/jarvis-chat", {
+      method: "POST",
+      headers: { authorization: "Bearer user-access-token" },
+    });
+
+    await expect(
+      authenticateSupabaseRequest(request, {
+        VITE_SUPABASE_URL: "https://project-ref.supabase.co/",
+        VITE_SUPABASE_ANON_KEY: "public-anon-key",
+      }),
+    ).resolves.toEqual({ id: "verified-user-id", accessToken: "user-access-token" });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://project-ref.supabase.co/auth/v1/user",
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          apikey: "public-anon-key",
+          authorization: "Bearer user-access-token",
+        }),
+      }),
+    );
   });
 
   it("surfaces API errors returned by the backend", async () => {
@@ -161,6 +227,6 @@ describe("Gemini chat request", () => {
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe("https://project-ref.supabase.co/functions/v1/jarvis-chat");
     expect(new Headers(init.headers).get("apikey")).toBe("public-anon-key");
-    expect(new Headers(init.headers).get("authorization")).toBe("Bearer public-anon-key");
+    expect(new Headers(init.headers).get("authorization")).toBe("Bearer user-access-token");
   });
 });

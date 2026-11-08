@@ -1,8 +1,9 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Mic, MicOff, RotateCcw, Send, Square, Trash2, Volume2, VolumeX } from "lucide-react";
 import { Shell } from "@/components/jarvis/Shell";
 import { Orb, type CoreState } from "@/components/jarvis/Orb";
+import { getCurrentUser } from "../lib/supabase/auth";
 import {
   useLocal,
   uid,
@@ -14,8 +15,20 @@ import {
 import { callJarvisChat, JARVIS_SYSTEM_INSTRUCTION } from "@/lib/ai/jarvis-ai";
 import { stopSpeaking, useSpeechRecognition, speak } from "@/lib/voice";
 import { cn } from "@/lib/utils";
+import {
+  setActiveCloudConversationId,
+  mergeChatMessages,
+  syncLocalChat,
+} from "@/lib/supabase/cloud-sync";
 
 export const Route = createFileRoute("/")({
+  beforeLoad: async () => {
+    const user = await getCurrentUser();
+
+    if (!user) {
+      throw redirect({ to: "/auth" });
+    }
+  },
   head: () => ({
     meta: [
       { title: "JARVIS Core - Personal AI Assistant" },
@@ -34,13 +47,19 @@ export const Route = createFileRoute("/")({
 });
 
 function Index() {
-  const [msgs, setMsgs] = useLocal<ChatMsg[]>("jarvis.chat", []);
+  const [msgs, setMsgs, localReady] = useLocal<ChatMsg[]>("jarvis.chat", []);
   const [settings] = useLocal<Settings>("jarvis.settings", defaultSettings);
   const [text, setText] = useState("");
   const [state, setState] = useState<CoreState>("idle");
   const [muted, setMuted] = useState(false);
   const [voiceMessage, setVoiceMessage] = useState<string | null>(null);
+  const [cloudMessage, setCloudMessage] = useState("");
+  const [cloudUserId, setCloudUserId] = useState<string | null>(null);
   const mutedRef = useRef(muted);
+  const cloudSyncLockRef = useRef(false);
+  const cloudSyncPendingRef = useRef(false);
+  const messagesRef = useRef(msgs);
+  messagesRef.current = msgs;
   const endRef = useRef<HTMLDivElement>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
   const inFlightRef = useRef(false);
@@ -52,6 +71,51 @@ function Index() {
   const sr = useSpeechRecognition((recognizedText) => sendRef.current(recognizedText));
   const { listening, stop: stopListening } = sr;
 
+  const syncCloudChat = useCallback(async () => {
+    if (!localReady) return;
+    if (cloudSyncLockRef.current) {
+      cloudSyncPendingRef.current = true;
+      return;
+    }
+    cloudSyncLockRef.current = true;
+    try {
+      do {
+        cloudSyncPendingRef.current = false;
+        const result = await syncLocalChat(messagesRef.current, () => {
+          messagesRef.current = [];
+          setMsgs([]);
+        });
+        setCloudUserId(result.userId);
+        setCloudMessage("");
+        const mergedMessages = mergeChatMessages(messagesRef.current, result.messages);
+        if (JSON.stringify(mergedMessages) !== JSON.stringify(messagesRef.current)) {
+          setMsgs(mergedMessages);
+        }
+        if (mergedMessages.length > result.messages.length) {
+          cloudSyncPendingRef.current = true;
+        }
+      } while (cloudSyncPendingRef.current);
+    } catch (error) {
+      setCloudMessage(
+        error instanceof Error
+          ? `Cloud sync pending: ${error.message}`
+          : "Cloud sync is pending. Local conversations are preserved.",
+      );
+    } finally {
+      cloudSyncLockRef.current = false;
+    }
+  }, [localReady, setMsgs]);
+
+  useEffect(() => {
+    void syncCloudChat();
+    window.addEventListener("online", syncCloudChat);
+    return () => window.removeEventListener("online", syncCloudChat);
+  }, [syncCloudChat]);
+
+  useEffect(() => {
+    void syncCloudChat();
+  }, [msgs, syncCloudChat]);
+
   const send = useCallback(
     async (value: string) => {
       const t = value.trim();
@@ -60,7 +124,13 @@ function Index() {
       inFlightRef.current = true;
       if (listening) stopListening();
       stopSpeaking();
-      const userMessage: ChatMsg = { id: uid(), role: "user", text: t, at: Date.now() };
+      const userMessage: ChatMsg = {
+        id: uid(),
+        role: "user",
+        text: t,
+        at: Date.now(),
+        idempotencyKey: window.crypto.randomUUID(),
+      };
       const nextMessages = [...msgs, userMessage];
 
       setText("");
@@ -80,6 +150,7 @@ function Index() {
           role: "assistant",
           text: response.reply,
           at: Date.now(),
+          idempotencyKey: window.crypto.randomUUID(),
         };
         setMsgs((current) => [...current, assistantMessage]);
         lastReplyRef.current = response.reply;
@@ -200,6 +271,9 @@ function Index() {
     sr.stop();
     stopSpeaking();
     lastReplyRef.current = "";
+    if (cloudUserId) {
+      setActiveCloudConversationId(cloudUserId, "");
+    }
     setMsgs([]);
     setState("idle");
   };
@@ -385,10 +459,11 @@ function Index() {
             <RotateCcw className="h-3.5 w-3.5" /> Repeat
           </button>
         </div>
-        {(sr.error || voiceMessage || !sr.supported) && (
+        {(sr.error || voiceMessage || cloudMessage || !sr.supported) && (
           <p className="text-xs text-muted-foreground text-center" role="status" aria-live="polite">
             {sr.error ??
               voiceMessage ??
+              cloudMessage ??
               "Voice input isn't available in this browser. Type instead, or use Chrome or Edge."}
           </p>
         )}
