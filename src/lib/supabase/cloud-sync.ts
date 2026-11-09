@@ -19,6 +19,23 @@ const CHAT_OWNER_KEY = "jarvis.chat.owner";
 const CHAT_ACTIVE_KEY = "jarvis.chat.active";
 const MEMORY_STORAGE_KEY = "jarvis.memory";
 const MEMORY_OWNER_KEY = "jarvis.memory.owner";
+const LEGACY_UNCLAIMED_MEMORY_KEY = "jarvis.memory.legacy-unclaimed";
+
+function preserveUnclaimedMemories(memories: Memory[]) {
+  const serializedMemories = JSON.stringify(memories);
+
+  for (let index = 0; ; index++) {
+    const backupKey =
+      index === 0 ? LEGACY_UNCLAIMED_MEMORY_KEY : `${LEGACY_UNCLAIMED_MEMORY_KEY}.${index}`;
+    const existingBackup = localStorage.getItem(backupKey);
+
+    if (existingBackup === serializedMemories) return;
+    if (existingBackup === null) {
+      localStorage.setItem(backupKey, serializedMemories);
+      return;
+    }
+  }
+}
 
 function createUuid() {
   if (!globalThis.crypto?.randomUUID) {
@@ -75,9 +92,7 @@ export function mergeChatMessages(local: ChatMsg[], cloud: ChatMsg[]) {
   const merged = new Map<string, ChatMsg>();
   for (const message of local) {
     merged.set(
-      message.error
-        ? `error:${message.id}`
-        : message.idempotencyKey ?? `local:${message.id}`,
+      message.error ? `error:${message.id}` : (message.idempotencyKey ?? `local:${message.id}`),
       message,
     );
   }
@@ -95,17 +110,14 @@ function saveLocalChat(messages: ChatMsg[]) {
 
 function conversationTitle(messages: ChatMsg[]) {
   const firstUserMessage = messages.find((message) => message.role === "user");
-  return (firstUserMessage?.text.trim().slice(0, 120) || "JARVIS Conversation");
+  return firstUserMessage?.text.trim().slice(0, 120) || "JARVIS Conversation";
 }
 
 function activeConversationStorageKey(userId: string) {
   return `${CHAT_ACTIVE_KEY}.${userId}`;
 }
 
-export async function syncLocalChat(
-  localMessages: ChatMsg[],
-  onOwnerChange?: () => void,
-) {
+export async function syncLocalChat(localMessages: ChatMsg[], onOwnerChange?: () => void) {
   const user = await getCurrentUser();
   if (!user?.id) {
     throw new Error("Please sign in again to synchronize your conversations.");
@@ -159,9 +171,11 @@ export async function syncLocalChat(
     });
   }
 
-  const cloudMessages = (await listCloudMessages({
-    data: { conversationId: conversation.id },
-  })).map(toLocalMessage);
+  const cloudMessages = (
+    await listCloudMessages({
+      data: { conversationId: conversation.id },
+    })
+  ).map(toLocalMessage);
   const mergedMessages = mergeChatMessages(keyedMessages, cloudMessages);
   saveLocalChat(mergedMessages);
 
@@ -176,13 +190,10 @@ export async function loadAllCloudChatMessages() {
   const conversations = await listCloudConversations();
   const messages = await Promise.all(
     conversations.map((conversation) =>
-      listCloudMessages({ data: { conversationId: conversation.id } })
+      listCloudMessages({ data: { conversationId: conversation.id } }),
     ),
   );
-  return mergeChatMessages(
-    [],
-    messages.flat().map(toLocalMessage),
-  );
+  return mergeChatMessages([], messages.flat().map(toLocalMessage));
 }
 
 export function getActiveCloudConversationId(userId: string) {
@@ -212,38 +223,49 @@ function toLocalMemory(memory: CloudMemory): Memory {
   };
 }
 
-export async function syncLocalMemories(localMemories: Memory[]) {
+export async function syncLocalMemories(
+  localMemories: Memory[],
+  onLocalDataIsolation?: (localDataIsolated: boolean) => void,
+) {
   const user = await getCurrentUser();
   if (!user?.id) {
     throw new Error("Please sign in again to synchronize your memories.");
   }
 
   const ownerId = localStorage.getItem(MEMORY_OWNER_KEY);
-  let migrationMemories = localMemories;
-  if (ownerId && ownerId !== user.id) {
-    localStorage.setItem(`${MEMORY_STORAGE_KEY}.backup.${ownerId}`, JSON.stringify(localMemories));
-    migrationMemories = [];
+  const localDataIsolated = ownerId !== user.id;
+  if (localDataIsolated && localMemories.length > 0) {
+    if (ownerId) {
+      const backupKey = `${MEMORY_STORAGE_KEY}.backup.${ownerId}`;
+      if (localStorage.getItem(backupKey) === null) {
+        localStorage.setItem(backupKey, JSON.stringify(localMemories));
+      }
+    } else {
+      preserveUnclaimedMemories(localMemories);
+    }
   }
-  localStorage.setItem(MEMORY_OWNER_KEY, user.id);
+  onLocalDataIsolation?.(localDataIsolated);
 
-  for (let offset = 0; offset < migrationMemories.length; offset += 100) {
-    const batch = migrationMemories.slice(offset, offset + 100).map((memory) => ({
-      memoryKey: memory.memoryKey ??
-        `legacy:${memory.category}:${memory.id}`,
-      memoryValue: memory.text,
-    }));
-    await migrateCloudMemories({ data: { memories: batch } });
-  }
+  const migrationMemories = localDataIsolated ? [] : localMemories;
+  if (!localDataIsolated) {
+    for (let offset = 0; offset < migrationMemories.length; offset += 100) {
+      const batch = migrationMemories.slice(offset, offset + 100).map((memory) => ({
+        memoryKey: memory.memoryKey ?? `legacy:${memory.category}:${memory.id}`,
+        memoryValue: memory.text,
+      }));
+      await migrateCloudMemories({ data: { memories: batch } });
+    }
 
-  for (const memory of migrationMemories.filter((item) => item.pendingSync)) {
-    const memoryKey = memory.memoryKey ??
-      `legacy:${memory.category}:${memory.id}`;
-    await saveCloudMemory({
-      data: { memoryKey, memoryValue: memory.text },
-    });
+    for (const memory of migrationMemories.filter((item) => item.pendingSync)) {
+      const memoryKey = memory.memoryKey ?? `legacy:${memory.category}:${memory.id}`;
+      await saveCloudMemory({
+        data: { memoryKey, memoryValue: memory.text },
+      });
+    }
   }
 
   const cloudMemories = (await listCloudMemories()).map(toLocalMemory);
   localStorage.setItem(MEMORY_STORAGE_KEY, JSON.stringify(cloudMemories));
-  return { userId: user.id, memories: cloudMemories };
+  localStorage.setItem(MEMORY_OWNER_KEY, user.id);
+  return { userId: user.id, memories: cloudMemories, localDataIsolated };
 }
